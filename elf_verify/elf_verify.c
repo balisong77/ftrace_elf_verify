@@ -82,18 +82,33 @@ static int fh_resolve_hook_address(struct ftrace_hook *hook)
 	return 0;
 }
 
-static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
-		struct ftrace_ops *ops, struct pt_regs *regs)
-{
-	struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 4, 51)
+    static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
+            struct ftrace_ops *ops, struct pt_regs *regs)
+    {
+        struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
 
-#if USE_FENTRY_OFFSET
-	regs->ip = (unsigned long) hook->function;
+    #if USE_FENTRY_OFFSET
+        regs->ip = (unsigned long) hook->function;
+    #else
+        if (!within_module(parent_ip, THIS_MODULE))
+            regs->ip = (unsigned long) hook->function;
+    #endif
+    }
 #else
-	if (!within_module(parent_ip, THIS_MODULE))
-		regs->ip = (unsigned long) hook->function;
+    static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
+            struct ftrace_ops *ops, struct ftrace_regs *regs)
+    {
+        struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
+
+    #if USE_FENTRY_OFFSET
+        regs->regs.ip = (unsigned long) hook->function;
+    #else
+        if (!within_module(parent_ip, THIS_MODULE))
+            regs->regs.ip = (unsigned long) hook->function;
+    #endif
+    }
 #endif
-}
 
 /**
  * fh_install_hooks() - register and enable a single hook
