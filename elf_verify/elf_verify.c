@@ -24,6 +24,7 @@
 #include <crypto/public_key.h>
 #include <crypto/hash.h>
 #include <linux/oid_registry.h>
+#include <linux/kprobes.h>
 #define SHT_SIG_PKEY 0x80736967	/* ((0x80 << 24)|('s' << 16)|('i' << 8)|'g') */
 #define SHT_SIG_CERT (SHT_SIG_PKEY + 1)
 
