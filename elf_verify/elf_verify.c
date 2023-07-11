@@ -64,9 +64,30 @@ struct ftrace_hook {
 	struct ftrace_ops ops;
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
+static unsigned long lookup_name(const char *name)
+{
+	struct kprobe kp = {
+		.symbol_name = name
+	};
+	unsigned long retval;
+
+	if (register_kprobe(&kp) < 0) return 0;
+	retval = (unsigned long) kp.addr;
+	unregister_kprobe(&kp);
+	return retval;
+}
+#else
+static unsigned long lookup_name(const char *name)
+{
+	return kallsyms_lookup_name(name);
+}
+#endif
+
 static int fh_resolve_hook_address(struct ftrace_hook *hook)
 {
-	hook->address = kallsyms_lookup_name(hook->name);
+	// hook->address = kallsyms_lookup_name(hook->name);
+	hook->address = lookup_name(hook->name);
 
 	if (!hook->address) {
 		pr_debug("unresolved symbol: %s\n", hook->name);
