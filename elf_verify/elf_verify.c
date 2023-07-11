@@ -31,9 +31,6 @@ MODULE_DESCRIPTION("Verify module for elf_sign.");
 MODULE_AUTHOR("ningyuv <ningyuv@outlook.com>");
 MODULE_LICENSE("GPL");
 
-extern long sys_execve(const char __user *filename,
-		const char __user *const __user *argv,
-		const char __user *const __user *envp);
 /*
  * There are two ways of preventing vicious recursive loops when hooking:
  * - detect recusion using function return address (USE_FENTRY_OFFSET = 0)
@@ -69,7 +66,7 @@ struct ftrace_hook {
 
 static int fh_resolve_hook_address(struct ftrace_hook *hook)
 {
-	// hook->address = kallsyms_lookup_name(hook->name);
+	hook->address = kallsyms_lookup_name(hook->name);
 
 	if (!hook->address) {
 		pr_debug("unresolved symbol: %s\n", hook->name);
@@ -86,7 +83,7 @@ static int fh_resolve_hook_address(struct ftrace_hook *hook)
 }
 
 static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
-		struct ftrace_ops *ops, struct ftrace_regs *regs)
+		struct ftrace_ops *ops, struct pt_regs *regs)
 {
 	struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
 
@@ -94,7 +91,7 @@ static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
 	regs->ip = (unsigned long) hook->function;
 #else
 	if (!within_module(parent_ip, THIS_MODULE))
-		regs->regs.ip = (unsigned long) hook->function;
+		regs->ip = (unsigned long) hook->function;
 #endif
 }
 
@@ -119,12 +116,17 @@ int fh_install_hook(struct ftrace_hook *hook)
 	 * We'll perform our own checks for trace function reentry.
 	 */
 	hook->ops.func = fh_ftrace_thunk;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 4, 51)
+	hook->ops.flags = FTRACE_OPS_FL_SAVE_REGS
+	                | FTRACE_OPS_FL_RECURSION_SAFE
+	                | FTRACE_OPS_FL_IPMODIFY;
+#else
 	hook->ops.flags = FTRACE_OPS_FL_SAVE_REGS
 	                | FTRACE_OPS_FL_IPMODIFY;
+#endif
 
-	// err = ftrace_set_filter_ip(&hook->ops, hook->address, 0, 0);
-	err = ftrace_set_filter(&hook->ops, hook->name, sizeof(*hook->name), 0);
-
+	//err = ftrace_set_filter_ip(&hook->ops, hook->address, 0, 0);
+    err = ftrace_set_filter(&hook->ops, hook->name, sizeof(*hook->name), 0);
 	if (err) {
 		pr_debug("ftrace_set_filter_ip() failed: %d\n", err);
 		return err;
@@ -133,7 +135,7 @@ int fh_install_hook(struct ftrace_hook *hook)
 	err = register_ftrace_function(&hook->ops);
 	if (err) {
 		pr_debug("register_ftrace_function() failed: %d\n", err);
-		ftrace_set_filter_ip(&hook->ops, hook->address, 1, 0);
+		ftrace_set_filter(&hook->ops, NULL, 0, 1);
 		return err;
 	}
 
@@ -153,9 +155,9 @@ void fh_remove_hook(struct ftrace_hook *hook)
 		pr_debug("unregister_ftrace_function() failed: %d\n", err);
 	}
 
-	err = ftrace_set_filter_ip(&hook->ops, hook->address, 1, 0);
+	err = ftrace_set_filter(&hook->ops, NULL, 0, 1);
 	if (err) {
-		pr_debug("ftrace_set_filter_ip() failed: %d\n", err);
+		pr_debug("ftrace_set_filter() failed: %d\n", err);
 	}
 }
 
@@ -384,18 +386,17 @@ out:
 	return signature;
 }
 
-// static inline int kernel_stat(const char __user *filename, struct kstat *stat)
-// {
-// 	int ret;
-	// mm_segment_t old_fs;
+static inline int kernel_stat(const char __user *filename, struct kstat *stat)
+{
+	int ret;
+	mm_segment_t old_fs;
 
-	// old_fs = get_fs();
-	// set_fs(KERNEL_DS);
-	// ret = vfs_stat(filename, stat);
-	// set_fs(old_fs);
-	// vfs_getattr(filename, stat, STATX_SIZE, AT_STATX_DONT_SYNC);
-	// return ret;
-// }
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	ret = vfs_stat(filename, stat);
+	set_fs(old_fs);
+	return ret;
+}
 
 static inline unsigned char *read_bytes(const char *filename, long long *len) {
 	struct file *fp;
@@ -410,15 +411,14 @@ static inline unsigned char *read_bytes(const char *filename, long long *len) {
 	stat = kmalloc(sizeof(struct kstat), GFP_KERNEL);
 	if (!stat)
 		goto out_no_stat;
-	//通过文件系统的stat获取文件长度（证书文件），以便后续利用kernel_read读取文件内容
-	// kernel_stat(filename, stat);
-	loff_t size = i_size_read(fp->f_path.dentry->d_inode);
-	// buf = kmalloc(stat->size, GFP_KERNEL);
-	buf = kmalloc(size, GFP_KERNEL);
+	//kernel_stat(filename, stat);
+    loff_t size = i_size_read(fp->f_path.dentry->d_inode);
+    stat->size = size;
+	buf = kmalloc(stat->size, GFP_KERNEL);
 	if (!buf)
 		goto out_no_buf_mem;
-	kernel_read(fp, buf, size, &offset);
-	*len = size;
+	kernel_read(fp, buf, stat->size, &offset);
+	*len = stat->size;
 
 out_no_buf_mem:
 	kfree(stat);
