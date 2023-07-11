@@ -401,17 +401,17 @@ out:
 	return signature;
 }
 
-static inline int kernel_stat(const char __user *filename, struct kstat *stat)
-{
-	int ret;
-	mm_segment_t old_fs;
+// static inline int kernel_stat(const char __user *filename, struct kstat *stat)
+// {
+// 	int ret;
+// 	mm_segment_t old_fs;
 
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
-	ret = vfs_stat(filename, stat);
-	set_fs(old_fs);
-	return ret;
-}
+// 	old_fs = get_fs();
+// 	set_fs(KERNEL_DS);
+// 	ret = vfs_stat(filename, stat);
+// 	set_fs(old_fs);
+// 	return ret;
+// }
 
 static inline unsigned char *read_bytes(const char *filename, long long *len) {
 	struct file *fp;
