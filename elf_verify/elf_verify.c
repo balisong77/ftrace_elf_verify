@@ -104,7 +104,7 @@ static int fh_resolve_hook_address(struct ftrace_hook *hook)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 11, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
     static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
             struct ftrace_ops *ops, struct pt_regs *regs)
     {
