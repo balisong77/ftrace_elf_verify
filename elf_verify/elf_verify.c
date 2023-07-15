@@ -153,7 +153,7 @@ int fh_install_hook(struct ftrace_hook *hook)
 	 * We'll perform our own checks for trace function reentry.
 	 */
 	hook->ops.func = fh_ftrace_thunk;
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 4, 51)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
 	hook->ops.flags = FTRACE_OPS_FL_SAVE_REGS
 	                | FTRACE_OPS_FL_RECURSION_SAFE
 	                | FTRACE_OPS_FL_IPMODIFY;
@@ -282,7 +282,7 @@ static inline void hex_dump(const void *const buf, long long buflen) {
 static inline struct file *open_file(char *kernel_filename) {
 	char *pwd_path, *buf, *elf_name;
 	struct file* fp = NULL;
-
+    // 从当前进程的fs结构中获取当前进程的pwd，来拼接待打开的文件的绝对路径
 	path_get(&current->fs->pwd);
 	buf = kmalloc(4096, GFP_KERNEL);
 	if (!buf)
