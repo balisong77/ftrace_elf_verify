@@ -104,30 +104,34 @@ static int fh_resolve_hook_address(struct ftrace_hook *hook)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 4, 51)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
     static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
             struct ftrace_ops *ops, struct pt_regs *regs)
     {
         struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
 
     #if USE_FENTRY_OFFSET
-        regs->ip = (unsigned long) hook->function;
+        regs->epc = (unsigned long) hook->function;
+		// regs->ip = (unsigned long) hook->function;
     #else
         if (!within_module(parent_ip, THIS_MODULE))
-            regs->ip = (unsigned long) hook->function;
+		    regs->epc = (unsigned long) hook->function;
+            // regs->ip = (unsigned long) hook->function;
     #endif
     }
 #else
     static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
-            struct ftrace_ops *ops, struct ftrace_regs *regs)
+            struct ftrace_ops *ops, struct ftrace_regs *fregs)
     {
         struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
 
     #if USE_FENTRY_OFFSET
-        regs->regs.ip = (unsigned long) hook->function;
+		fregs->regs.epc = (unsigned long) hook->function;
+        // fregs->regs.ip = (unsigned long) hook->function;
     #else
         if (!within_module(parent_ip, THIS_MODULE))
-            regs->regs.ip = (unsigned long) hook->function;
+			fregs->regs.epc = (unsigned long) hook->function;
+            // fregs->regs.ip = (unsigned long) hook->function;
     #endif
     }
 #endif
@@ -153,7 +157,7 @@ int fh_install_hook(struct ftrace_hook *hook)
 	 * We'll perform our own checks for trace function reentry.
 	 */
 	hook->ops.func = fh_ftrace_thunk;
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 4, 51)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
 	hook->ops.flags = FTRACE_OPS_FL_SAVE_REGS
 	                | FTRACE_OPS_FL_RECURSION_SAFE
 	                | FTRACE_OPS_FL_IPMODIFY;
@@ -241,11 +245,11 @@ void fh_remove_hooks(struct ftrace_hook *hooks, size_t count)
 		fh_remove_hook(&hooks[i]);
 }
 
-#ifndef CONFIG_X86_64
-#error Currently only x86_64 architecture is supported
-#endif
+// #ifndef CONFIG_X86_64
+// #error Currently only x86_64 architecture is supported
+// #endif
 
-#if defined(CONFIG_X86_64) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0))
 #define PTREGS_SYSCALL_STUBS 1
 #endif
 
@@ -803,7 +807,7 @@ static asmlinkage long fh_sys_execve(struct pt_regs *regs)
 	long ret;
 	char *kernel_filename;
 
-	kernel_filename = duplicate_filename((void*) regs->di);
+	kernel_filename = duplicate_filename((void*) regs->a0);
 	pr_info("execve() before: %s\n", kernel_filename);
 
 	ret = do_verify(kernel_filename);

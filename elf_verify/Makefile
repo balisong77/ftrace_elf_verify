@@ -1,5 +1,5 @@
 KERNEL_PATH ?= /lib/modules/$(shell uname -r)/build
-
+#KERNEL_PATH ?= /home/lunqi-kubuntu/codeRepo/linux-stable
 obj-m += elf_verify.o
 
 all:
